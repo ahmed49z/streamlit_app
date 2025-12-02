@@ -111,7 +111,8 @@ conn = init_db()
 
 # الشريط الجانبي
 with st.sidebar:
-    st.image("📊", width=80)
+    # استخدم markdown بدلاً من image للإيموجي
+    st.markdown("## 📊")
     st.title("لوحة التحكم")
     
     menu = st.radio(
