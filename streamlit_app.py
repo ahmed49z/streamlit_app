@@ -1,107 +1,97 @@
 import streamlit as st
-import pandas as pd
 import sqlite3
+import pandas as pd
+import csv
 import io
 from datetime import datetime
-from contextlib import closing
 
 # إعداد الصفحة
 st.set_page_config(
     page_title="برنامج محاسبي متكامل",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_icon="💰",
+    layout="wide"
 )
 
-# تنسيق النصوص العربية
+# تنسيق عربي
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
     
     * {
-        font-family: 'Tajawal', sans-serif;
-        text-align: right;
-        direction: rtl;
+        font-family: 'Tajawal', sans-serif !important;
+        text-align: right !important;
+        direction: rtl !important;
     }
     
     .stButton > button {
-        width: 100%;
         background-color: #4CAF50;
         color: white;
         font-weight: bold;
+        border-radius: 5px;
+        border: none;
+        padding: 10px 20px;
     }
     
-    .stTextInput > div > div > input {
+    .stButton > button:hover {
+        background-color: #45a049;
+    }
+    
+    .stSelectbox > div > div {
         text-align: right;
     }
     
-    .reportview-container .main .block-container {
-        padding-top: 2rem;
+    .stNumberInput > div > div > input {
+        text-align: right;
     }
     
-    h1, h2, h3, h4, h5, h6 {
+    h1, h2, h3 {
         color: #2c3e50;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# العنوان الرئيسي
-st.title("📊 البرنامج المحاسبي المتكامل")
-st.markdown("---")
-
-# تهيئة قاعدة البيانات في الذاكرة
+# تهيئة قاعدة البيانات
+@st.cache_resource
 def init_db():
     conn = sqlite3.connect(':memory:', check_same_thread=False)
     cursor = conn.cursor()
     
-    # جدول العملاء
-    cursor.execute('''CREATE TABLE IF NOT EXISTS clients (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        country TEXT,
-        contact TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # جدول الفواتير
+    # إنشاء الجداول
     cursor.execute('''CREATE TABLE IF NOT EXISTS invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_name TEXT,
-        amount REAL NOT NULL,
-        tax REAL DEFAULT 0,
-        description TEXT,
-        date DATE DEFAULT CURRENT_DATE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        client TEXT,
+        country TEXT,
+        amount REAL,
+        tax REAL,
+        date TEXT DEFAULT CURRENT_DATE
     )''')
     
-    # جدول الإيرادات
-    cursor.execute('''CREATE TABLE IF NOT EXISTS revenue (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source TEXT NOT NULL,
-        amount REAL NOT NULL,
-        description TEXT,
-        date DATE DEFAULT CURRENT_DATE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # جدول المصروفات
     cursor.execute('''CREATE TABLE IF NOT EXISTS expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        description TEXT NOT NULL,
-        amount REAL NOT NULL,
-        category TEXT,
-        date DATE DEFAULT CURRENT_DATE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        description TEXT,
+        amount REAL,
+        date TEXT DEFAULT CURRENT_DATE
     )''')
     
-    # إضافة بيانات تجريبية
-    cursor.execute("INSERT OR IGNORE INTO clients (name, country, contact) VALUES (?, ?, ?)",
-                  ('شركة التقنية المحدودة', 'السعودية', '0112345678'))
-    cursor.execute("INSERT OR IGNORE INTO clients (name, country, contact) VALUES (?, ?, ?)",
-                  ('مؤسسة النجاح', 'البحرين', '33221100'))
+    cursor.execute('''CREATE TABLE IF NOT EXISTS revenue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT,
+        amount REAL,
+        date TEXT DEFAULT CURRENT_DATE
+    )''')
     
-    cursor.execute("INSERT OR IGNORE INTO invoices (client_name, amount, tax, description) VALUES (?, ?, ?, ?)",
-                  ('شركة التقنية المحدودة', 5000.00, 250.00, 'تصميم موقع إلكتروني'))
+    cursor.execute('''CREATE TABLE IF NOT EXISTS clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE,
+        country TEXT,
+        contact TEXT
+    )''')
+    
+    # بيانات تجريبية
+    cursor.execute("INSERT OR IGNORE INTO clients (name, country, contact) VALUES (?, ?, ?)", 
+                   ('شركة النجاح', 'السعودية', '0112345678'))
+    cursor.execute("INSERT OR IGNORE INTO clients (name, country, contact) VALUES (?, ?, ?)", 
+                   ('مؤسسة التميز', 'البحرين', '33221100'))
     
     conn.commit()
     return conn
@@ -109,303 +99,312 @@ def init_db():
 # الاتصال بقاعدة البيانات
 conn = init_db()
 
-# الشريط الجانبي
-with st.sidebar:
-    # استخدم markdown بدلاً من image للإيموجي
-    st.markdown("## 📊")
-    st.title("لوحة التحكم")
-    
-    menu = st.radio(
-        "القائمة الرئيسية",
-        ["🏠 الرئيسية", "👥 العملاء", "🧾 الفواتير", "💰 الإيرادات", "💸 المصروفات", "⚙️ الإعدادات"]
-    )
-    
-    st.markdown("---")
-    st.info("إصدار 1.0 | برنامج محاسبي متكامل")
-    
-    # إحصائيات سريعة
-    with closing(conn.cursor()) as cursor:
-        cursor.execute("SELECT COUNT(*) FROM clients")
-        clients_count = cursor.fetchone()[0]
-        st.caption(f"👥 العملاء: {clients_count}")
-        
-        cursor.execute("SELECT COUNT(*) FROM invoices")
-        invoices_count = cursor.fetchone()[0]
-        st.caption(f"🧾 الفواتير: {invoices_count}")
+# العنوان الرئيسي
+st.title("💰 برنامج محاسبي متكامل")
+st.markdown("---")
 
-# الصفحة الرئيسية
-if menu == "🏠 الرئيسية":
-    st.header("🏠 لوحة التحكم الرئيسية")
+# تحميل العملاء
+def load_clients():
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, country, contact FROM clients ORDER BY name")
+    return cursor.fetchall()
+
+# الواجهة الرئيسية
+clients = load_clients()
+
+if clients:
+    # اختيار العميل
+    client_options = [f"{name} - {country}" for _, name, country, _ in clients]
+    selected_client = st.selectbox("👥 اختر العميل:", client_options)
     
-    # بطاقات الإحصائيات
-    col1, col2, col3, col4 = st.columns(4)
+    # استخراج اسم العميل المختار
+    client_name = selected_client.split(" - ")[0] if selected_client else ""
     
-    with closing(conn.cursor()) as cursor:
-        with col1:
-            cursor.execute("SELECT COUNT(*) FROM clients")
-            clients_count = cursor.fetchone()[0]
-            st.metric("عدد العملاء", clients_count, "👥")
-        
-        with col2:
-            cursor.execute("SELECT SUM(amount) FROM invoices")
-            invoices_total = cursor.fetchone()[0] or 0
-            st.metric("إجمالي الفواتير", f"{invoices_total:,.2f}", "💰")
-        
-        with col3:
-            cursor.execute("SELECT SUM(amount) FROM revenue")
-            revenue_total = cursor.fetchone()[0] or 0
-            st.metric("إجمالي الإيرادات", f"{revenue_total:,.2f}", "📈")
-        
-        with col4:
-            cursor.execute("SELECT SUM(amount) FROM expenses")
-            expenses_total = cursor.fetchone()[0] or 0
-            st.metric("إجمالي المصروفات", f"{expenses_total:,.2f}", "💸")
+    # عرض معلومات العميل
+    for client in clients:
+        if client[1] == client_name:
+            st.info(f"**العميل:** {client[1]} | **الدولة:** {client[2]} | **التواصل:** {client[3]}")
+            break
+else:
+    st.warning("⚠️ لا يوجد عملاء. الرجاء إضافة عميل أولاً.")
+    client_name = ""
+
+# أزرار التنقل بين العملاء
+if len(clients) > 1:
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("◀ السابق"):
+            # يمكن إضافة منطق التنقل هنا
+            st.rerun()
+    with col2:
+        if st.button("التالي ▶"):
+            st.rerun()
+
+# تبويبات الوظائف
+tab1, tab2, tab3, tab4 = st.tabs(["📋 الفواتير", "💰 الإيرادات", "💸 المصروفات", "👥 الإدارة"])
+
+# تبويب الفواتير
+with tab1:
+    st.header("إدارة الفواتير")
     
-    # الميزانية
-    st.subheader("📊 الميزانية")
     col1, col2 = st.columns(2)
     
     with col1:
-        profit = revenue_total - expenses_total
-        st.info(f"**الإيرادات:** {revenue_total:,.2f} ريال")
-        st.info(f"**المصروفات:** {expenses_total:,.2f} ريال")
-        st.success(f"**صافي الربح:** {profit:,.2f} ريال")
+        with st.form("add_invoice_form"):
+            st.subheader("إضافة فاتورة جديدة")
+            
+            if not clients:
+                st.error("يجب إضافة عميل أولاً")
+            else:
+                client_names = [name for _, name, _, _ in clients]
+                selected_invoice_client = st.selectbox("العميل:", client_names, key="invoice_client")
+            
+            country = st.selectbox("الدولة:", ["البحرين", "السعودية", "الإمارات", "عُمان", "قطر", "الكويت"])
+            amount = st.number_input("المبلغ (ر.س):", min_value=0.0, step=0.01)
+            
+            if st.form_submit_button("➕ إضافة فاتورة"):
+                if amount > 0 and selected_invoice_client:
+                    tax = amount * 0.05
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO invoices (client, country, amount, tax, date) VALUES (?, ?, ?, ?, DATE('now'))",
+                        (selected_invoice_client, country, amount, tax)
+                    )
+                    conn.commit()
+                    st.success(f"✅ تمت إضافة فاتورة بقيمة {amount:.2f} ريال")
+                    st.rerun()
+                else:
+                    st.error("يرجى ملء جميع الحقول")
     
     with col2:
-        if revenue_total > 0:
-            expense_ratio = (expenses_total / revenue_total) * 100
-            profit_ratio = 100 - expense_ratio
-            st.metric("نسبة الربح", f"{profit_ratio:.1f}%")
-        else:
-            st.info("لا توجد إيرادات مسجلة")
-    
-    # العملاء الأخيرين
-    st.subheader("👥 آخر العملاء المضافين")
-    with closing(conn.cursor()) as cursor:
-        cursor.execute("SELECT name, country, contact, created_at FROM clients ORDER BY created_at DESC LIMIT 5")
-        clients = cursor.fetchall()
-        
-        if clients:
-            df_clients = pd.DataFrame(clients, columns=["الاسم", "الدولة", "التواصل", "تاريخ الإضافة"])
-            st.dataframe(df_clients, use_container_width=True)
-        else:
-            st.info("لا يوجد عملاء مسجلين بعد")
-
-# إدارة العملاء
-elif menu == "👥 العملاء":
-    st.header("👥 إدارة العملاء")
-    
-    tab1, tab2 = st.tabs(["➕ إضافة عميل جديد", "📋 قائمة العملاء"])
-    
-    with tab1:
-        with st.form("add_client_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                name = st.text_input("اسم العميل *", placeholder="أدخل اسم العميل الكامل")
-                contact = st.text_input("رقم التواصل *", placeholder="رقم الهاتف أو البريد")
-            
-            with col2:
-                country = st.selectbox(
-                    "الدولة",
-                    ["اختر الدولة", "البحرين", "السعودية", "الإمارات", "عُمان", "قطر", "الكويت", "أخرى"]
-                )
-            
-            submitted = st.form_submit_button("✅ إضافة العميل", use_container_width=True)
-            
-            if submitted:
-                if name and contact and country != "اختر الدولة":
-                    try:
-                        with closing(conn.cursor()) as cursor:
-                            cursor.execute(
-                                "INSERT INTO clients (name, country, contact) VALUES (?, ?, ?)",
-                                (name, country, contact)
-                            )
-                            conn.commit()
-                            st.success(f"✅ تمت إضافة العميل **{name}** بنجاح!")
-                            st.balloons()
-                    except Exception as e:
-                        st.error(f"حدث خطأ: {e}")
-                else:
-                    st.error("⚠️ يرجى ملء جميع الحقول الإلزامية (*)")
-    
-    with tab2:
-        with closing(conn.cursor()) as cursor:
-            cursor.execute("SELECT id, name, country, contact, created_at FROM clients ORDER BY created_at DESC")
-            clients = cursor.fetchall()
-            
-            if clients:
-                df_clients = pd.DataFrame(clients, columns=["ID", "الاسم", "الدولة", "التواصل", "تاريخ الإضافة"])
-                st.dataframe(df_clients, use_container_width=True, hide_index=True)
-                
-                # خيارات التصدير
-                csv = df_clients.to_csv(index=False, encoding='utf-8-sig')
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.download_button(
-                        label="📥 تحميل قائمة العملاء (CSV)",
-                        data=csv,
-                        file_name="clients.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
-                
-                with col2:
-                    if st.button("🗑️ حذف جميع العملاء", use_container_width=True):
-                        with closing(conn.cursor()) as cur:
-                            cur.execute("DELETE FROM clients")
-                            conn.commit()
-                            st.success("تم حذف جميع العملاء")
-                            st.rerun()
-            else:
-                st.info("📭 لا يوجد عملاء مسجلين بعد")
-
-# إدارة الفواتير
-elif menu == "🧾 الفواتير":
-    st.header("🧾 إدارة الفواتير")
-    
-    # الحصول على قائمة العملاء
-    with closing(conn.cursor()) as cursor:
-        cursor.execute("SELECT name FROM clients")
-        clients_list = [row[0] for row in cursor.fetchall()]
-    
-    tab1, tab2 = st.tabs(["➕ إضافة فاتورة جديدة", "📋 الفواتير المسجلة"])
-    
-    with tab1:
-        with st.form("add_invoice_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                if clients_list:
-                    client_name = st.selectbox("اختر العميل *", clients_list)
-                else:
-                    st.warning("⚠️ لا يوجد عملاء. يرجى إضافة عميل أولاً.")
-                    client_name = None
-                
-                amount = st.number_input("المبلغ *", min_value=0.0, step=0.01, value=0.0)
-                tax_rate = st.slider("نسبة الضريبة %", 0, 20, 5)
-            
-            with col2:
-                description = st.text_area("وصف الفاتورة", placeholder="وصف الخدمة أو المنتج")
-                date = st.date_input("تاريخ الفاتورة", datetime.now())
-            
-            submitted = st.form_submit_button("✅ إضافة الفاتورة", use_container_width=True)
-            
-            if submitted:
-                if client_name and amount > 0:
-                    tax_amount = amount * (tax_rate / 100)
-                    total_amount = amount + tax_amount
-                    
-                    try:
-                        with closing(conn.cursor()) as cursor:
-                            cursor.execute(
-                                """INSERT INTO invoices 
-                                (client_name, amount, tax, description, date) 
-                                VALUES (?, ?, ?, ?, ?)""",
-                                (client_name, amount, tax_amount, description, date)
-                            )
-                            conn.commit()
-                            st.success(f"✅ تمت إضافة فاتورة بقيمة **{total_amount:,.2f}** ريال")
-                            st.info(f"المبلغ الأساسي: {amount:,.2f} | الضريبة: {tax_amount:,.2f}")
-                    except Exception as e:
-                        st.error(f"حدث خطأ: {e}")
-                else:
-                    st.error("⚠️ يرجى اختيار عميل وإدخال مبلغ صحيح")
-    
-    with tab2:
-        with closing(conn.cursor()) as cursor:
-            cursor.execute("""
-                SELECT client_name, amount, tax, description, date 
-                FROM invoices 
-                ORDER BY date DESC
-            """)
+        st.subheader("تصدير الفواتير")
+        if client_name:
+            cursor = conn.cursor()
+            cursor.execute("SELECT client, country, amount, tax, date FROM invoices WHERE client=?", (client_name,))
             invoices = cursor.fetchall()
             
             if invoices:
-                df_invoices = pd.DataFrame(invoices, 
-                    columns=["العميل", "المبلغ", "الضريبة", "الوصف", "التاريخ"])
-                df_invoices["الإجمالي"] = df_invoices["المبلغ"] + df_invoices["الضريبة"]
+                df = pd.DataFrame(invoices, columns=["العميل", "الدولة", "المبلغ", "الضريبة", "التاريخ"])
+                st.dataframe(df, use_container_width=True)
                 
-                # الإحصائيات
-                total_amount = df_invoices["الإجمالي"].sum()
-                st.metric("💰 إجمالي قيمة الفواتير", f"{total_amount:,.2f} ريال")
+                # تحويل إلى CSV
+                csv_buffer = io.StringIO()
+                df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+                csv_str = csv_buffer.getvalue()
                 
-                st.dataframe(df_invoices, use_container_width=True, hide_index=True)
-                
-                # تحميل البيانات
-                csv = df_invoices.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
-                    label="📥 تحميل الفواتير (CSV)",
-                    data=csv,
-                    file_name="invoices.csv",
-                    mime="text/csv",
-                    use_container_width=True
+                    label="📥 تحميل CSV",
+                    data=csv_str,
+                    file_name=f"فواتير_{client_name}.csv",
+                    mime="text/csv"
                 )
             else:
-                st.info("📭 لا توجد فواتير مسجلة")
+                st.info("لا توجد فواتير لهذا العميل")
 
-# باقي القوائم (يمكنك إكمالها بنفس الطريقة)
-elif menu == "💰 الإيرادات":
-    st.header("💰 إدارة الإيرادات")
-    st.info("قريباً... سيتم تفعيل هذه الصفحة في التحديث القادم")
+# تبويب الإيرادات
+with tab2:
+    st.header("إدارة الإيرادات")
     
-elif menu == "💸 المصروفات":
-    st.header("💸 إدارة المصروفات")
-    st.info("قريباً... سيتم تفعيل هذه الصفحة في التحديث القادم")
-
-elif menu == "⚙️ الإعدادات":
-    st.header("⚙️ إعدادات النظام")
-    
-    st.subheader("تصدير جميع البيانات")
-    
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📥 تصدير العملاء", use_container_width=True):
-            with closing(conn.cursor()) as cursor:
-                cursor.execute("SELECT * FROM clients")
-                data = cursor.fetchall()
-                if data:
-                    df = pd.DataFrame(data)
-                    csv = df.to_csv(index=False, encoding='utf-8-sig')
-                    st.download_button(
-                        label="تحميل الآن",
-                        data=csv,
-                        file_name="clients_full.csv",
-                        mime="text/csv"
+        with st.form("add_revenue_form"):
+            st.subheader("إضافة إيراد جديد")
+            source = st.text_input("مصدر الإيراد:")
+            amount = st.number_input("المبلغ (ر.س):", min_value=0.0, step=0.01, key="rev_amount")
+            
+            if st.form_submit_button("➕ إضافة إيراد"):
+                if source and amount > 0:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO revenue (source, amount, date) VALUES (?, ?, DATE('now'))",
+                        (source, amount)
                     )
+                    conn.commit()
+                    st.success(f"✅ تمت إضافة إيراد بقيمة {amount:.2f} ريال")
+                    st.rerun()
+                else:
+                    st.error("يرجى ملء جميع الحقول")
     
     with col2:
-        if st.button("📥 تصدير الفواتير", use_container_width=True):
-            with closing(conn.cursor()) as cursor:
-                cursor.execute("SELECT * FROM invoices")
-                data = cursor.fetchall()
-                if data:
-                    df = pd.DataFrame(data)
-                    csv = df.to_csv(index=False, encoding='utf-8-sig')
-                    st.download_button(
-                        label="تحميل الآن",
-                        data=csv,
-                        file_name="invoices_full.csv",
-                        mime="text/csv"
-                    )
+        st.subheader("تصدير الإيرادات")
+        cursor = conn.cursor()
+        cursor.execute("SELECT source, amount, date FROM revenue ORDER BY date DESC")
+        revenue = cursor.fetchall()
+        
+        if revenue:
+            df = pd.DataFrame(revenue, columns=["المصدر", "المبلغ", "التاريخ"])
+            st.dataframe(df, use_container_width=True)
+            
+            total_revenue = df["المبلغ"].sum()
+            st.metric("إجمالي الإيرادات", f"{total_revenue:.2f} ر.س")
+            
+            # تحويل إلى CSV
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+            csv_str = csv_buffer.getvalue()
+            
+            st.download_button(
+                label="📥 تحميل CSV",
+                data=csv_str,
+                file_name="الإيرادات.csv",
+                mime="text/csv",
+                key="rev_csv"
+            )
+        else:
+            st.info("لا توجد إيرادات مسجلة")
+
+# تبويب المصروفات
+with tab3:
+    st.header("إدارة المصروفات")
     
-    st.subheader("إحصائيات النظام")
-    with closing(conn.cursor()) as cursor:
-        cursor.execute("SELECT COUNT(*) FROM clients")
-        clients = cursor.fetchone()[0]
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        with st.form("add_expense_form"):
+            st.subheader("إضافة مصروف جديد")
+            description = st.text_input("وصف المصروف:")
+            amount = st.number_input("المبلغ (ر.س):", min_value=0.0, step=0.01, key="exp_amount")
+            
+            if st.form_submit_button("➕ إضافة مصروف"):
+                if description and amount > 0:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO expenses (description, amount, date) VALUES (?, ?, DATE('now'))",
+                        (description, amount)
+                    )
+                    conn.commit()
+                    st.success(f"✅ تمت إضافة مصروف بقيمة {amount:.2f} ريال")
+                    st.rerun()
+                else:
+                    st.error("يرجى ملء جميع الحقول")
+    
+    with col2:
+        st.subheader("تصدير المصروفات")
+        cursor = conn.cursor()
+        cursor.execute("SELECT description, amount, date FROM expenses ORDER BY date DESC")
+        expenses = cursor.fetchall()
         
-        cursor.execute("SELECT COUNT(*) FROM invoices")
-        invoices = cursor.fetchone()[0]
+        if expenses:
+            df = pd.DataFrame(expenses, columns=["الوصف", "المبلغ", "التاريخ"])
+            st.dataframe(df, use_container_width=True)
+            
+            total_expenses = df["المبلغ"].sum()
+            st.metric("إجمالي المصروفات", f"{total_expenses:.2f} ر.س")
+            
+            # تحويل إلى CSV
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
+            csv_str = csv_buffer.getvalue()
+            
+            st.download_button(
+                label="📥 تحميل CSV",
+                data=csv_str,
+                file_name="المصروفات.csv",
+                mime="text/csv",
+                key="exp_csv"
+            )
+        else:
+            st.info("لا توجد مصروفات مسجلة")
+
+# تبويب الإدارة (العملاء)
+with tab4:
+    st.header("إدارة العملاء")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        with st.form("add_client_form"):
+            st.subheader("إضافة عميل جديد")
+            name = st.text_input("اسم العميل:")
+            country = st.selectbox("الدولة:", ["البحرين", "السعودية", "الإمارات", "عُمان", "قطر", "الكويت", "أخرى"], key="client_country")
+            contact = st.text_input("رقم التواصل:")
+            
+            if st.form_submit_button("➕ إضافة عميل"):
+                if name and contact:
+                    try:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT INTO clients (name, country, contact) VALUES (?, ?, ?)",
+                            (name, country, contact)
+                        )
+                        conn.commit()
+                        st.success(f"✅ تمت إضافة العميل {name} بنجاح!")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("⚠️ اسم العميل موجود مسبقاً")
+                else:
+                    st.error("يرجى ملء جميع الحقول")
+    
+    with col2:
+        st.subheader("قائمة العملاء")
+        clients_list = load_clients()
         
-        st.write(f"**عدد العملاء:** {clients}")
-        st.write(f"**عدد الفواتير:** {invoices}")
-        st.write(f"**تاريخ النظام:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        if clients_list:
+            df_clients = pd.DataFrame(clients_list, columns=["ID", "الاسم", "الدولة", "التواصل"])
+            st.dataframe(df_clients[["الاسم", "الدولة", "التواصل"]], use_container_width=True)
+            
+            # خيار حذف عميل
+            client_to_delete = st.selectbox(
+                "اختر عميل لحذفه:",
+                [name for _, name, _, _ in clients_list],
+                key="delete_client"
+            )
+            
+            if st.button("🗑️ حذف العميل", type="secondary"):
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM clients WHERE name = ?", (client_to_delete,))
+                conn.commit()
+                st.success(f"تم حذف العميل {client_to_delete}")
+                st.rerun()
+        else:
+            st.info("لا يوجد عملاء مسجلين")
 
-# إغلاق الاتصال عند إنهاء الجلسة
-conn.close()
-
-# تذييل الصفحة
+# تذييل الصفحة - الإحصائيات
 st.markdown("---")
-st.caption("© 2026 البرنامج المحاسبي المتكامل | إصدار 1.0 | تطوير: ahmed49z")
+st.header("📊 الإحصائيات الكلية")
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    cursor = conn.cursor()
+    if client_name:
+        cursor.execute("SELECT SUM(amount) FROM invoices WHERE client=?", (client_name,))
+        total_invoices = cursor.fetchone()[0] or 0
+        st.metric("فواتير العميل", f"{total_invoices:.2f} ر.س")
+    else:
+        st.metric("فواتير العميل", "0.00 ر.س")
+
+with col2:
+    cursor.execute("SELECT SUM(amount) FROM revenue")
+    total_revenue = cursor.fetchone()[0] or 0
+    st.metric("إجمالي الإيرادات", f"{total_revenue:.2f} ر.س")
+
+with col3:
+    cursor.execute("SELECT SUM(amount) FROM expenses")
+    total_expenses = cursor.fetchone()[0] or 0
+    st.metric("إجمالي المصروفات", f"{total_expenses:.2f} ر.س")
+
+with col4:
+    remaining = total_revenue - total_expenses
+    color = "normal" if remaining >= 0 else "inverse"
+    st.metric("المتبقي", f"{remaining:.2f} ر.س", delta_color=color)
+
+# زر تصدير تقرير شامل
+st.markdown("---")
+if st.button("📊 إنشاء تقرير شامل (PDF)"):
+    st.info("""
+    **معلومات حول التقرير:**
+    
+    لتصدير تقرير PDF، يمكنك تثبيت مكتبة `reportlab`:
+    
+    ```bash
+    pip install reportlab
+    ```
+    
+    أو استخدم خيار CSV المتاح في كل قسم.
+    """)
+
+# تذييل
+st.markdown("---")
+st.caption("© 2026 البرنامج المحاسبي المتكامل | إصدار Streamlit 1.0")
